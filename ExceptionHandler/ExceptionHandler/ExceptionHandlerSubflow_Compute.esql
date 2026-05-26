@@ -1,0 +1,84 @@
+BROKER SCHEMA ExceptionHandler
+
+CREATE COMPUTE MODULE ExceptionHandlerSubflow_Compute
+
+    CREATE FUNCTION Main() RETURNS BOOLEAN
+    BEGIN
+
+        DECLARE errorCode CHARACTER;
+        DECLARE errorMessage CHARACTER;
+
+        -------------------------------------------------
+        -- FIRST PRIORITY
+        -- READ FROM ENVIRONMENT (7001/7002/7003/9001)
+        -------------------------------------------------
+
+        SET errorCode =
+            Environment.Error.ErrorCode;
+
+        SET errorMessage =
+            Environment.Error.ErrorMessage;
+
+        -------------------------------------------------
+        -- IF ENVIRONMENT EMPTY
+        -- READ FROM EXCEPTIONLIST (1001-1006)
+        -------------------------------------------------
+
+        IF errorCode IS NULL THEN
+
+            DECLARE userRef REFERENCE TO
+            InputExceptionList.RecoverableException.
+            RecoverableException.UserException;
+
+            IF LASTMOVE(userRef) THEN
+
+                SET errorCode =
+                    CAST(userRef.Number AS CHARACTER);
+
+                DECLARE insRef REFERENCE TO
+                    userRef.Insert[1];
+
+                IF LASTMOVE(insRef) THEN
+                    SET errorMessage =
+                        FIELDVALUE(insRef.Text);
+                END IF;
+
+            END IF;
+
+        END IF;
+
+        -------------------------------------------------
+        -- DEFAULTS
+        -------------------------------------------------
+
+        IF errorCode IS NULL THEN
+            SET errorCode = '5000';
+        END IF;
+
+        IF errorMessage IS NULL THEN
+            SET errorMessage = 'Unknown Error';
+        END IF;
+
+        -------------------------------------------------
+        -- SET ENVIRONMENT
+        -------------------------------------------------
+
+        SET Environment.Error.ErrorCode =
+            errorCode;
+
+        SET Environment.Error.ErrorMessage =
+            errorMessage;
+
+        -------------------------------------------------
+        -- DEFAULT HTTP STATUS
+        -------------------------------------------------
+
+        IF Environment.Error.HTTPStatusCode IS NULL THEN
+            SET Environment.Error.HTTPStatusCode = 500;
+        END IF;
+
+        RETURN TRUE;
+
+    END;
+
+END MODULE;
