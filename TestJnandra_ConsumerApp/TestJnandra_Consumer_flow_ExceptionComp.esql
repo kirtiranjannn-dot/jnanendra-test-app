@@ -1,0 +1,35 @@
+CREATE COMPUTE MODULE TestJnandra_Consumer_flow_ExceptionComp
+
+    CREATE FUNCTION Main() RETURNS BOOLEAN
+    BEGIN
+
+        DECLARE errorCode CHARACTER;
+        DECLARE errorMessage CHARACTER;
+        DECLARE httpCode INTEGER;
+
+        SET errorCode = Environment.Error.ErrorCode;
+        SET errorMessage = Environment.Error.ErrorMessage;
+
+        SET httpCode =
+            COALESCE(Environment.Error.HTTPStatusCode, 500);
+
+        DELETE FIELD OutputRoot;
+
+        SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode =
+            httpCode;
+
+        CREATE LASTCHILD OF OutputRoot DOMAIN('XMLNSC');
+
+        CREATE LASTCHILD OF OutputRoot.XMLNSC NAME 'ErrorResponse';
+
+        SET OutputRoot.XMLNSC.ErrorResponse.Status = 'FAILED';
+        SET OutputRoot.XMLNSC.ErrorResponse.HttpStatusCode =
+            CAST(httpCode AS CHARACTER);
+        SET OutputRoot.XMLNSC.ErrorResponse.ErrorCode = errorCode;
+        SET OutputRoot.XMLNSC.ErrorResponse.ErrorMessage = errorMessage;
+
+        RETURN TRUE;
+
+    END;
+
+END MODULE;

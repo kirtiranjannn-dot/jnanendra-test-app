@@ -1,0 +1,136 @@
+CREATE COMPUTE MODULE TestJnandra_Consumer_flow_Compute
+
+    CREATE FUNCTION Main() RETURNS BOOLEAN
+    BEGIN
+
+        DECLARE inputName CHARACTER '';
+        DECLARE i INTEGER 1;
+        DECLARE ch CHARACTER;
+        DECLARE validName BOOLEAN TRUE;
+
+        -------------------------------------------------
+        -- FIXED JSON VALIDATION (IMPORTANT)
+        -------------------------------------------------
+
+        IF CARDINALITY(InputRoot.JSON.Data.*[]) = 0 THEN
+
+            SET Environment.Error.HTTPStatusCode = 400;
+
+            THROW USER EXCEPTION
+            MESSAGE 1001
+            VALUES('JSON Data Missing');
+
+        END IF;
+
+        -------------------------------------------------
+        -- NAME FIELD VALIDATION
+        -------------------------------------------------
+
+        DECLARE nameRef REFERENCE TO InputRoot.JSON.Data.name;
+
+        IF NOT LASTMOVE(nameRef) THEN
+
+            SET Environment.Error.HTTPStatusCode = 400;
+
+            THROW USER EXCEPTION
+            MESSAGE 1002
+            VALUES('Name field missing');
+
+        END IF;
+
+        SET inputName = TRIM(FIELDVALUE(nameRef));
+
+        -------------------------------------------------
+        -- EMPTY VALIDATION
+        -------------------------------------------------
+
+        IF inputName = '' THEN
+
+            SET Environment.Error.HTTPStatusCode = 400;
+
+            THROW USER EXCEPTION
+            MESSAGE 1003
+            VALUES('Name is empty');
+
+        END IF;
+
+        -------------------------------------------------
+        -- LENGTH VALIDATION (FIXED)
+        -------------------------------------------------
+
+        IF LENGTH(inputName) < 3 THEN
+
+            SET Environment.Error.HTTPStatusCode = 422;
+
+            THROW USER EXCEPTION
+            MESSAGE 1006
+            VALUES('Name length should be minimum 3');
+
+        END IF;
+
+        IF LENGTH(inputName) > 20 THEN
+
+            SET Environment.Error.HTTPStatusCode = 422;
+
+            THROW USER EXCEPTION
+            MESSAGE 1004
+            VALUES('Name length exceeded');
+
+        END IF;
+
+        -------------------------------------------------
+        -- SPECIAL BACKEND KEYWORDS SKIP VALIDATION
+        -------------------------------------------------
+
+        IF UPPER(inputName) IN
+        ('BLOCKED','PARTIAL','EMPTYRESPONSE','BACKENDERROR') THEN
+            SET Environment.Variables.UserName = inputName;
+
+			CREATE LASTCHILD OF OutputRoot DOMAIN('JSON');
+			SET OutputRoot.JSON.Data.name = inputName;
+            RETURN TRUE;
+        END IF;
+        
+        
+
+        -------------------------------------------------
+        -- CHARACTER VALIDATION (FIXED)
+        -------------------------------------------------
+
+        SET i = 1;
+        SET validName = TRUE;
+
+        WHILE i <= LENGTH(inputName) DO
+
+            SET ch = SUBSTRING(inputName FROM i FOR 1);
+
+           IF NOT (
+    			(ch BETWEEN 'A' AND 'Z')
+    			OR (ch BETWEEN 'a' AND 'z')
+				) THEN
+
+   			 SET validName = FALSE;
+
+			END IF;
+
+            SET i = i + 1;
+
+        END WHILE;
+
+        IF validName = FALSE THEN
+
+            SET Environment.Error.HTTPStatusCode = 422;
+
+            THROW USER EXCEPTION
+            MESSAGE 1005
+            VALUES('Invalid name format');
+
+        END IF;
+
+        SET Environment.Variables.UserName = inputName;
+
+        RETURN TRUE;
+
+    END;
+
+END MODULE;

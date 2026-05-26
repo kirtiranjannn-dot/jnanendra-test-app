@@ -1,0 +1,175 @@
+CREATE COMPUTE MODULE TestJnandra_Consumer_flow_Compute1
+
+    CREATE FUNCTION Main() RETURNS BOOLEAN
+    BEGIN
+
+        DECLARE userName CHARACTER;
+
+        DECLARE accountNumber CHARACTER '';
+        DECLARE accountType CHARACTER '';
+        DECLARE backendStatus CHARACTER '';
+        DECLARE backendMessage CHARACTER '';
+
+        DECLARE accRef REFERENCE TO InputRoot.JSON.Data.accountNumber;
+        DECLARE typeRef REFERENCE TO InputRoot.JSON.Data.accountType;
+        DECLARE statusRef REFERENCE TO InputRoot.JSON.Data.backendStatus;
+        DECLARE msgRef REFERENCE TO InputRoot.JSON.Data.backendMessage;
+
+        -------------------------------------------------
+        -- Read Environment
+        -------------------------------------------------
+
+        SET userName =
+            Environment.Variables.UserName;
+
+        -------------------------------------------------
+        -- Read Backend Response
+        -------------------------------------------------
+
+        IF LASTMOVE(accRef) THEN
+            SET accountNumber = FIELDVALUE(accRef);
+        END IF;
+
+        IF LASTMOVE(typeRef) THEN
+            SET accountType = FIELDVALUE(typeRef);
+        END IF;
+
+        IF LASTMOVE(statusRef) THEN
+            SET backendStatus = FIELDVALUE(statusRef);
+        END IF;
+
+        IF LASTMOVE(msgRef) THEN
+            SET backendMessage = FIELDVALUE(msgRef);
+        END IF;
+
+        -------------------------------------------------
+        -- TC11 EMPTY BACKEND RESPONSE
+        -------------------------------------------------
+
+        IF accountNumber = ''
+           AND accountType = ''
+           AND backendStatus = '' THEN
+
+            SET Environment.Error.HTTPStatusCode =
+                '502';
+
+            SET Environment.Error.ErrorCode =
+                '7001';
+
+            SET Environment.Error.ErrorMessage =
+                'Empty response from backend';
+
+            THROW USER EXCEPTION
+            VALUES('Empty response from backend');
+
+        END IF;
+
+        -------------------------------------------------
+        -- TC10 PARTIAL RESPONSE
+        -------------------------------------------------
+
+        IF accountNumber <> ''
+           AND accountType = '' THEN
+
+            SET Environment.Error.HTTPStatusCode =
+                '502';
+
+            SET Environment.Error.ErrorCode =
+                '7002';
+
+            SET Environment.Error.ErrorMessage =
+                'Incomplete backend response';
+
+            THROW USER EXCEPTION
+            VALUES('Incomplete backend response');
+
+        END IF;
+
+        -------------------------------------------------
+        -- TC09 BLOCKED ACCOUNT
+        -------------------------------------------------
+
+        IF backendStatus = 'BLOCKED' THEN
+
+            SET Environment.Error.HTTPStatusCode =
+                '403';
+
+            SET Environment.Error.ErrorCode =
+                '7003';
+
+            SET Environment.Error.ErrorMessage =
+                'Account is blocked';
+
+            THROW USER EXCEPTION
+            VALUES('Account is blocked');
+
+        END IF;
+
+        -------------------------------------------------
+        -- TC12 BACKEND ERROR
+        -------------------------------------------------
+
+        IF backendStatus = 'ERROR' THEN
+
+            SET Environment.Error.HTTPStatusCode =
+                '500';
+
+            SET Environment.Error.ErrorCode =
+                '9001';
+
+            SET Environment.Error.ErrorMessage =
+                'Backend Internal Error';
+
+            THROW USER EXCEPTION
+            VALUES('Backend Internal Error');
+
+        END IF;
+
+        -------------------------------------------------
+        -- Clear Existing Output
+        -------------------------------------------------
+
+        DELETE FIELD OutputRoot;
+
+        -------------------------------------------------
+        -- Success Status
+        -------------------------------------------------
+
+        SET OutputLocalEnvironment.Destination.HTTP.ReplyStatusCode =
+            200;
+
+        -------------------------------------------------
+        -- Final XML Response
+        -------------------------------------------------
+
+        CREATE LASTCHILD OF OutputRoot DOMAIN('XMLNSC');
+
+        CREATE LASTCHILD OF OutputRoot.XMLNSC
+        NAME 'Response';
+
+        SET OutputRoot.XMLNSC.Response.Status =
+            'SUCCESS';
+
+        SET OutputRoot.XMLNSC.Response.StatusCode =
+            '200';
+
+        SET OutputRoot.XMLNSC.Response.UserName =
+            userName;
+
+        SET OutputRoot.XMLNSC.Response.AccountNumber =
+            accountNumber;
+
+        SET OutputRoot.XMLNSC.Response.AccountType =
+            accountType;
+
+        SET OutputRoot.XMLNSC.Response.BackendStatus =
+            backendStatus;
+
+        SET OutputRoot.XMLNSC.Response.BackendMessage =
+            backendMessage;
+
+        RETURN TRUE;
+
+    END;
+
+END MODULE;
