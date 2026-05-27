@@ -2,7 +2,7 @@ CREATE COMPUTE MODULE TestJnandra_Consumer_flow_Compute1
 
     CREATE FUNCTION Main() RETURNS BOOLEAN
     BEGIN
-	-- dummy comment 
+	-- dummy comment sdfs
         DECLARE userName CHARACTER;
 
         DECLARE accountNumber CHARACTER '';
